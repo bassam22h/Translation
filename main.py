@@ -41,7 +41,7 @@ COMMON_LANGUAGES = {
 def create_main_keyboard():
     buttons = [
         [KeyboardButton("🌐 تغيير لغة الهدف")],
-        [KeyboardButton("ℹ️ المساعدة")]  # زر المساعدة كما تريد
+        [KeyboardButton("ℹ️ المساعدة")]
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
@@ -57,22 +57,21 @@ def create_lang_keyboard():
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
 def start(update: Update, context: CallbackContext):
+    # تعيين العربية كلغة افتراضية
     if 'target_lang' not in context.user_data:
         context.user_data['target_lang'] = 'ar'
         context.user_data['target_lang_name'] = '🇸🇦 العربية'
     
     welcome_msg = f"""
-✨ *مرحباً بك في بوت الترجمة الذكي!* ✨
+✨ مرحباً بك في بوت الترجمة الذكي! ✨
 
-🔹 *لغة الهدف الحالية:* {context.user_data.get('target_lang_name', '🇸🇦 العربية')}
-🔹 *طريقة الاستخدام:*
-1. فقط أرسل النص وسأترجمه تلقائياً
-   - إذا كان النص عربياً سأترجمه للإنجليزية
-   - إذا كان النص بلغة أخرى سأترجمه للعربية
+🔹 لغة الهدف الحالية: {context.user_data.get('target_lang_name', '🇸🇦 العربية')}
+🔹 طريقة الاستخدام:
+فقط أرسل النص وسأترجمه تلقائياً إلى اللغة {context.user_data.get('target_lang_name', '🇸🇦 العربية')}
+مهما كانت لغة النص سيتم ترجمته إلى {context.user_data.get('target_lang_name', '🇸🇦 العربية')} مباشرة
 """
     update.message.reply_text(
         welcome_msg,
-        parse_mode='Markdown',
         reply_markup=create_main_keyboard()
     )
 
@@ -92,32 +91,22 @@ def handle_text(update: Update, context: CallbackContext):
         context.user_data['target_lang_name'] = '🇸🇦 العربية'
     
     try:
+        # الكشف عن لغة النص
         detected = translator.detect(user_message)
         src_lang = detected.lang
-        confidence = detected.confidence * 100 if detected.confidence else 0
+        src_lang_name = LANGUAGES.get(src_lang, src_lang)
         
-        if src_lang == context.user_data['target_lang']:
-            translation = translator.translate(user_message, dest='en')
-            src_lang_name = LANGUAGES.get(src_lang, src_lang)
-            update.message.reply_text(
-                f"🔁 *تمت الترجمة التلقائية إلى الإنجليزية:*\n\n"
-                f"{translation.text}\n\n"
-                f"لغة النص الأصلية: {src_lang_name}",
-                parse_mode='Markdown',
-                reply_markup=create_main_keyboard()
-            )
-        else:
-            translation = translator.translate(
-                user_message,
-                dest=context.user_data['target_lang']
-            )
-            src_lang_name = LANGUAGES.get(src_lang, src_lang)
-            update.message.reply_text(
-                f"🌐 *تمت الترجمة من {src_lang_name} إلى العربية:*\n\n"
-                f"{translation.text}",
-                parse_mode='Markdown',
-                reply_markup=create_main_keyboard()
-            )
+        # الترجمة إلى لغة الهدف
+        translation = translator.translate(
+            user_message,
+            dest=context.user_data['target_lang']
+        )
+        
+        update.message.reply_text(
+            f"🌐 تمت الترجمة من {src_lang_name} إلى {context.user_data['target_lang_name']}:\n\n"
+            f"{translation.text}",
+            reply_markup=create_main_keyboard()
+        )
     
     except Exception as e:
         logger.error(f"Error in translation: {e}")
@@ -158,25 +147,22 @@ def handle_language_selection(update: Update, context: CallbackContext):
 
 def help_command(update: Update, context: CallbackContext):
     help_msg = f"""
-🆘 *مساعدة بوت الترجمة*
+🆘 مساعدة بوت الترجمة
 
-🔹 *لغة الهدف الحالية:* {context.user_data.get('target_lang_name', '🇸🇦 العربية')}
-🔹 *طريقة الاستخدام:*
-1. أرسل أي نص وسيتم ترجمته تلقائياً:
-   - النص العربي → الإنجليزية
-   - النص الأجنبي → العربية
+🔹 لغة الهدف الحالية: {context.user_data.get('target_lang_name', '🇸🇦 العربية')}
+🔹 طريقة الاستخدام:
+1. أرسل أي نص بأي لغة كانت وسيتم ترجمته تلقائياً
 
 2. لتغيير لغة الهدف:
    - اضغط على زر "🌐 تغيير لغة الهدف"
    - اختر اللغة الجديدة من القائمة
 
-📌 *ملاحظة مهمة:*
+📌 ملاحظة مهمة:
 إذا توقف البوت عن الاستجابة، ما عليك سوى الانتظار قليلاً وسيتم معالجة طلبك تلقائياً.
 الرجاء عدم تكرار إرسال الطلبات لتجنب التحميل الزائد على النظام.
 """
     update.message.reply_text(
         help_msg,
-        parse_mode='Markdown',
         reply_markup=create_main_keyboard()
     )
 
