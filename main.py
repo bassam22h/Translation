@@ -1,6 +1,6 @@
 import os
 import logging
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from googletrans import Translator, LANGUAGES
 
@@ -23,158 +23,211 @@ if not TOKEN:
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # مثال: https://your-bot-name.onrender.com
 PORT = int(os.environ.get('PORT', 5000))  # Render يستخدم PORT تلقائياً
 
-# لوحة المفاتيح للغات الشائعة
-language_keyboard = [
-    ['العربية', 'English', 'Español'],
-    ['Français', '中文', 'Русский'],
-    ['كشف اللغة تلقائياً']
-]
-reply_markup = ReplyKeyboardMarkup(language_keyboard, resize_keyboard=True)
-
-# قاموس تحويل أسماء اللغات إلى أكواد
-LANGUAGE_CODES = {
+# لغات شائعة للعرض في لوحة المفاتيح
+COMMON_LANGUAGES = {
     'العربية': 'ar',
     'English': 'en',
     'Español': 'es',
     'Français': 'fr',
+    'Deutsch': 'de',
     '中文': 'zh-cn',
-    'Русский': 'ru'
+    '日本語': 'ja',
+    'Русский': 'ru',
+    'Português': 'pt',
+    'Italiano': 'it'
 }
 
-def start_translation(update: Update, context: CallbackContext):
-    """بدء عملية الترجمة باختيار لغة الهدف"""
+# إنشاء لوحة مفاتيح للغات
+def get_language_keyboard():
+    buttons = [[KeyboardButton(lang)] for lang in COMMON_LANGUAGES.keys()]
+    buttons.append([KeyboardButton("إلغاء")])
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+
+def start(update: Update, context: CallbackContext):
+    welcome_msg = """
+🌟 *مرحباً بك في بوت الترجمة الذكي!* 🌟
+
+🚀 *كيفية الاستخدام:*
+1. أرسل لي النص الذي تريد ترجمته (أي لغة)
+2. سأقوم باكتشاف اللغة تلقائياً
+3. اختر اللغة التي تريد الترجمة إليها
+
+💡 *مثال:*
+أرسل: "Hello my friend"
+ثم اختر: "العربية" لترجمة النص للعربية
+
+✅ *اللغات المدعومة:* جميع اللغات الرئيسية
+    """
+    
+    update.message.reply_text(
+        welcome_msg,
+        parse_mode='Markdown',
+        reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
+    )
+
+def handle_text(update: Update, context: CallbackContext):
     user_message = update.message.text
     
-    if user_message == "كشف اللغة تلقائياً":
-        context.user_data['translation_mode'] = 'auto'
+    if user_message == "إلغاء":
         update.message.reply_text(
-            "تم تفعيل الكشف التلقائي للغة.\n"
-            "الآن أرسل النص الذي تريد ترجمته وسأحاول اكتشاف لغته تلقائياً وترجمته للإنجليزية:",
+            "تم إلغاء العملية الحالية. يمكنك إرسال نص جديد للترجمة.",
             reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
-        )
-    elif user_message in LANGUAGE_CODES:
-        context.user_data['translation_mode'] = 'manual'
-        context.user_data['target_lang'] = LANGUAGE_CODES[user_message]
-        update.message.reply_text(
-            f"تم اختيار لغة الهدف: {user_message}\n"
-            "الآن أرسل النص الذي تريد ترجمته:",
-            reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
-        )
-    elif user_message == "إلغاء":
-        update.message.reply_text(
-            "تم الإلغاء. اختر لغة الهدف من جديد:",
-            reply_markup=reply_markup
         )
         context.user_data.clear()
-    else:
+        return
+    
+    try:
+        # الكشف عن لغة النص
+        detected = translator.detect(user_message)
+        src_lang = detected.lang
+        confidence = detected.confidence * 100 if detected.confidence else 0
+        
+        # حفظ النص ولغة المصدر
+        context.user_data['text_to_translate'] = user_message
+        context.user_data['src_lang'] = src_lang
+        
+        # إعداد رسالة الرد
+        lang_name = LANGUAGES.get(src_lang, src_lang)
+        confidence_msg = f" (ثقة: {confidence:.1f}%)" if confidence > 0 else ""
+        
         update.message.reply_text(
-            "مرحباً! يرجى اختيار لغة الهدف أولاً:",
-            reply_markup=reply_markup
+            f"🔍 *تم الكشف عن اللغة:* {lang_name}{confidence_msg}\n\n"
+            "الآن اختر *اللغة الهدف* للترجمة من القائمة أدناه، "
+            "أو اكتب اسم اللغة بالإنجليزية (مثل 'french' أو 'german')",
+            parse_mode='Markdown',
+            reply_markup=get_language_keyboard()
+        )
+    
+    except Exception as e:
+        logger.error(f"Error in language detection: {e}", exc_info=True)
+        update.message.reply_text(
+            "⚠️ عذراً، لم أتمكن من تحديد لغة النص. يرجى المحاولة مرة أخرى.",
+            reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
         )
 
-def handle_translation(update: Update, context: CallbackContext):
-    """معالجة النص المراد ترجمته"""
+def handle_language_selection(update: Update, context: CallbackContext):
+    user_message = update.message.text
+    
+    if user_message == "إلغاء":
+        update.message.reply_text(
+            "تم إلغاء العملية الحالية. يمكنك إرسال نص جديد للترجمة.",
+            reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
+        )
+        context.user_data.clear()
+        return
+    
     try:
-        user_message = update.message.text
-        
-        if 'translation_mode' not in context.user_data:
+        # الحصول على النص المحفوظ
+        if 'text_to_translate' not in context.user_data:
             update.message.reply_text(
-                "الرجاء اختيار لغة الهدف أولاً:",
-                reply_markup=reply_markup
+                "⚠️ لم يتم العثور على نص للترجمة. يرجى إرسال النص أولاً.",
+                reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
             )
             return
         
-        if context.user_data['translation_mode'] == 'auto':
-            # الكشف التلقائي والترجمة للإنجليزية
-            detected = translator.detect(user_message)
-            src_lang = detected.lang
-            confidence = detected.confidence * 100 if detected.confidence else 0
+        text_to_translate = context.user_data['text_to_translate']
+        src_lang = context.user_data.get('src_lang', 'auto')
+        
+        # تحديد لغة الهدف
+        dest_lang = COMMON_LANGUAGES.get(user_message)
+        
+        if not dest_lang:
+            # إذا كانت اللغة غير موجودة في القائمة، نبحث في جميع اللغات
+            dest_lang = None
+            for code, name in LANGUAGES.items():
+                if user_message.lower() in name.lower():
+                    dest_lang = code
+                    break
             
-            if confidence < 60:
+            if not dest_lang:
                 update.message.reply_text(
-                    f"تم الكشف عن اللغة: {LANGUAGES.get(src_lang, src_lang)} (ثقة: {confidence:.1f}%)\n"
-                    "الثقة منخفضة، الرجاء تحديد اللغة يدوياً.",
-                    reply_markup=reply_markup
+                    "⚠️ لم يتم التعرف على اللغة المطلوبة. يرجى اختيار لغة من القائمة أو كتابة اسم اللغة بشكل صحيح.",
+                    reply_markup=get_language_keyboard()
                 )
                 return
-            
-            translation = translator.translate(user_message, dest='en')
-            
-            update.message.reply_text(
-                f"تم الكشف عن اللغة: {LANGUAGES.get(src_lang, src_lang)} (ثقة: {confidence:.1f}%)\n\n"
-                f"الترجمة إلى الإنجليزية:\n{translation.text}\n\n"
-                "اختر لغة أخرى للترجمة إذا أردت:",
-                reply_markup=reply_markup
-            )
         
-        elif context.user_data['translation_mode'] == 'manual':
-            # الترجمة للغة المحددة مع الكشف التلقائي للغة المصدر
-            detected = translator.detect(user_message)
-            src_lang = detected.lang if detected.lang else 'auto'
-            
-            translation = translator.translate(
-                user_message,
-                src=src_lang,
-                dest=context.user_data['target_lang']
-            )
-            
-            update.message.reply_text(
-                f"تمت الترجمة من {LANGUAGES.get(src_lang, src_lang)} إلى {LANGUAGES.get(context.user_data['target_lang'], context.user_data['target_lang'])}:\n\n"
-                f"{translation.text}",
-                reply_markup=reply_markup
-            )
+        # تنفيذ الترجمة
+        translation = translator.translate(
+            text_to_translate,
+            src=src_lang,
+            dest=dest_lang
+        )
         
+        # إعداد رسالة النتيجة
+        src_lang_name = LANGUAGES.get(src_lang, src_lang)
+        dest_lang_name = LANGUAGES.get(dest_lang, dest_lang)
+        
+        update.message.reply_text(
+            f"🌍 *الترجمة من {src_lang_name} إلى {dest_lang_name}:*\n\n"
+            f"{translation.text}\n\n"
+            "يمكنك إرسال نص جديد للترجمة أو استخدام /help لرؤية التعليمات.",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
+        )
+        
+        # مسح البيانات المؤقتة
         context.user_data.clear()
     
     except Exception as e:
         logger.error(f"Error in translation: {e}", exc_info=True)
         update.message.reply_text(
-            "حدث خطأ أثناء الترجمة. يرجى المحاولة مرة أخرى.",
-            reply_markup=reply_markup
+            "⚠️ حدث خطأ أثناء الترجمة. يرجى المحاولة مرة أخرى.",
+            reply_markup=get_language_keyboard()
         )
-        context.user_data.clear()
-
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text(
-        "مرحباً في بوت الترجمة الذكي!\n\n"
-        "يمكنني:\n"
-        "1. ترجمة النص إلى اللغة التي تختارها\n"
-        "2. كشف اللغة تلقائياً وترجمة النص\n\n"
-        "اختر لغة الهدف من لوحة المفاتيح أدناه:",
-        reply_markup=reply_markup
-    )
 
 def help_command(update: Update, context: CallbackContext):
+    help_msg = """
+🆘 *مساعدة بوت الترجمة*
+
+📝 *طريقة الاستخدام:*
+1. أرسل النص الذي تريد ترجمته (أي لغة)
+2. سأكتشف اللغة تلقائياً
+3. اختر اللغة الهدف من القائمة أو اكتب اسمها
+
+🎯 *مثال:*
+أرسل: "Bonjour comment ça va؟"
+ثم اختر: "English" لترجمة النص للإنجليزية
+
+🌐 *اللغات المدعومة:* جميع اللغات الرئيسية
+استخدم أسماء اللغات بالإنجليزية مثل:
+- french, german, spanish, russian, etc.
+
+❌ *لإلغاء أي عملية:* اكتب أو اضغط على "إلغاء"
+    """
+    
     update.message.reply_text(
-        "كيفية استخدام البوت:\n\n"
-        "1. اختر لغة الهدف من لوحة المفاتيح\n"
-        "2. أرسل النص الذي تريد ترجمته\n"
-        "3. أو اختر 'كشف اللغة تلقائياً' ثم أرسل النص\n\n"
-        "يمكنك الضغط على 'إلغاء' في أي وقت لبدء من جديد.",
-        reply_markup=reply_markup
+        help_msg,
+        parse_mode='Markdown',
+        reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
     )
 
 def error_handler(update: Update, context: CallbackContext):
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
+    if update and update.message:
+        update.message.reply_text(
+            "⚠️ حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+            reply_markup=ReplyKeyboardMarkup([['إلغاء']], resize_keyboard=True)
+        )
 
 def main():
     updater = Updater(TOKEN, use_context=True)
     
     dp = updater.dispatcher
     
+    # معالجة الأوامر
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
     
-    # معالجة اختيار اللغة
+    # معالجة النص العادي (المرحلة الأولى: إرسال النص)
     dp.add_handler(MessageHandler(
-        Filters.regex(r'^(العربية|English|Español|Français|中文|Русский|كشف اللغة تلقائياً|إلغاء)$'),
-        start_translation
+        Filters.text & ~Filters.command & ~Filters.regex(r'^(إلغاء)$'),
+        handle_text
     ))
     
-    # معالجة النص للترجمة
+    # معالجة اختيار اللغة (المرحلة الثانية)
     dp.add_handler(MessageHandler(
-        Filters.text & ~Filters.command,
-        handle_translation
+        Filters.regex(r'^(إلغاء|العربية|English|Español|Français|Deutsch|中文|日本語|Русский|Português|Italiano|[a-zA-Z]+)$'),
+        handle_language_selection
     ))
     
     dp.add_error_handler(error_handler)
