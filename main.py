@@ -41,7 +41,7 @@ COMMON_LANGUAGES = {
 def create_main_keyboard():
     buttons = [
         [KeyboardButton("🌐 تغيير لغة الهدف")],
-        [KeyboardButton("ℹ️ المساعدة")]
+        [KeyboardButton("ℹ️ المساعدة")]  # زر المساعدة كما تريد
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
@@ -57,7 +57,6 @@ def create_lang_keyboard():
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
 def start(update: Update, context: CallbackContext):
-    # تعيين العربية كلغة افتراضية
     if 'target_lang' not in context.user_data:
         context.user_data['target_lang'] = 'ar'
         context.user_data['target_lang_name'] = '🇸🇦 العربية'
@@ -70,13 +69,6 @@ def start(update: Update, context: CallbackContext):
 1. فقط أرسل النص وسأترجمه تلقائياً
    - إذا كان النص عربياً سأترجمه للإنجليزية
    - إذا كان النص بلغة أخرى سأترجمه للعربية
-
-📌 *مثال:*
-أرسل: "Hello how are you?"
-سيتم ترجمته إلى العربية تلقائياً
-
-أرسل: "مرحبا كيف حالك؟"
-سيتم ترجمته إلى الإنجليزية تلقائياً
 """
     update.message.reply_text(
         welcome_msg,
@@ -87,22 +79,23 @@ def start(update: Update, context: CallbackContext):
 def handle_text(update: Update, context: CallbackContext):
     user_message = update.message.text
     
-    # تجاهل الأزرار
-    if user_message in ["🌐 تغيير لغة الهدف", "ℹ️ المساعدة", "↩️ العودة للرئيسية"]:
+    # معالجة زر المساعدة
+    if user_message == "ℹ️ المساعدة":
+        return help_command(update, context)
+        
+    # تجاهل الأزرار الأخرى
+    if user_message in ["🌐 تغيير لغة الهدف", "↩️ العودة للرئيسية"]:
         return
     
-    # إذا لم يتم تعيين لغة الهدف، نستخدم العربية
     if 'target_lang' not in context.user_data:
         context.user_data['target_lang'] = 'ar'
         context.user_data['target_lang_name'] = '🇸🇦 العربية'
     
     try:
-        # الكشف عن لغة النص
         detected = translator.detect(user_message)
         src_lang = detected.lang
         confidence = detected.confidence * 100 if detected.confidence else 0
         
-        # إذا كانت لغة النص هي العربية، نترجم للإنجليزية
         if src_lang == context.user_data['target_lang']:
             translation = translator.translate(user_message, dest='en')
             src_lang_name = LANGUAGES.get(src_lang, src_lang)
@@ -114,7 +107,6 @@ def handle_text(update: Update, context: CallbackContext):
                 reply_markup=create_main_keyboard()
             )
         else:
-            # الترجمة إلى العربية
             translation = translator.translate(
                 user_message,
                 dest=context.user_data['target_lang']
@@ -177,10 +169,6 @@ def help_command(update: Update, context: CallbackContext):
 2. لتغيير لغة الهدف:
    - اضغط على زر "🌐 تغيير لغة الهدف"
    - اختر اللغة الجديدة من القائمة
-
-3. الأوامر المتاحة:
-   /start - إعادة تشغيل البوت
-   /help - عرض رسالة المساعدة
 
 📌 *ملاحظة مهمة:*
 إذا توقف البوت عن الاستجابة، ما عليك سوى الانتظار قليلاً وسيتم معالجة طلبك تلقائياً.
