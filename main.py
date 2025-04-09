@@ -23,7 +23,7 @@ if not TOKEN:
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 PORT = int(os.environ.get('PORT', 5000))
 
-# لغات شائعة مع إيموجيات (تمت إضافة الفارسية)
+# لغات شائعة مع إيموجيات
 COMMON_LANGUAGES = {
     "🇸🇦 العربية": "ar",
     "🇬🇧 English": "en",
@@ -47,7 +47,12 @@ def create_main_keyboard():
 
 def create_lang_keyboard():
     lang_keys = list(COMMON_LANGUAGES.keys())
-    buttons = [lang_keys[i:i+2] for i in range(0, len(lang_keys), 2]
+    buttons = []
+    for i in range(0, len(lang_keys), 2):
+        if i+1 < len(lang_keys):
+            buttons.append([lang_keys[i], lang_keys[i+1]])
+        else:
+            buttons.append([lang_keys[i]])
     buttons.append(["↩️ العودة للرئيسية"])
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
@@ -55,16 +60,16 @@ def start(update: Update, context: CallbackContext):
     # تعيين العربية كلغة افتراضية
     if 'target_lang' not in context.user_data:
         context.user_data['target_lang'] = 'ar'
-        context.user_data['target_lang_name'] = 'العربية'
+        context.user_data['target_lang_name'] = '🇸🇦 العربية'
     
     welcome_msg = f"""
 ✨ *مرحباً بك في بوت الترجمة الذكي!* ✨
 
-🔹 *لغة الهدف الحالية:* {context.user_data.get('target_lang_name', 'العربية')}
+🔹 *لغة الهدف الحالية:* {context.user_data.get('target_lang_name', '🇸🇦 العربية')}
 🔹 *طريقة الاستخدام:*
 1. فقط أرسل النص وسأترجمه تلقائياً
-   - إذا كان النص بلغة الهدف (العربية) سأترجمه للإنجليزية
-   - إذا كان النص بأي لغة أخرى سأترجمه للعربية
+   - إذا كان النص عربياً سأترجمه للإنجليزية
+   - إذا كان النص بلغة أخرى سأترجمه للعربية
 
 📌 *مثال:*
 أرسل: "Hello how are you?"
@@ -89,7 +94,7 @@ def handle_text(update: Update, context: CallbackContext):
     # إذا لم يتم تعيين لغة الهدف، نستخدم العربية
     if 'target_lang' not in context.user_data:
         context.user_data['target_lang'] = 'ar'
-        context.user_data['target_lang_name'] = 'العربية'
+        context.user_data['target_lang_name'] = '🇸🇦 العربية'
     
     try:
         # الكشف عن لغة النص
@@ -97,7 +102,7 @@ def handle_text(update: Update, context: CallbackContext):
         src_lang = detected.lang
         confidence = detected.confidence * 100 if detected.confidence else 0
         
-        # إذا كانت لغة النص هي لغة الهدف (العربية)، نترجم للإنجليزية
+        # إذا كانت لغة النص هي العربية، نترجم للإنجليزية
         if src_lang == context.user_data['target_lang']:
             translation = translator.translate(user_message, dest='en')
             src_lang_name = LANGUAGES.get(src_lang, src_lang)
@@ -109,14 +114,14 @@ def handle_text(update: Update, context: CallbackContext):
                 reply_markup=create_main_keyboard()
             )
         else:
-            # الترجمة إلى لغة الهدف (العربية)
+            # الترجمة إلى العربية
             translation = translator.translate(
                 user_message,
                 dest=context.user_data['target_lang']
             )
             src_lang_name = LANGUAGES.get(src_lang, src_lang)
             update.message.reply_text(
-                f"🌐 *تمت الترجمة من {src_lang_name} إلى {context.user_data['target_lang_name']}:*\n\n"
+                f"🌐 *تمت الترجمة من {src_lang_name} إلى العربية:*\n\n"
                 f"{translation.text}",
                 parse_mode='Markdown',
                 reply_markup=create_main_keyboard()
@@ -163,11 +168,11 @@ def help_command(update: Update, context: CallbackContext):
     help_msg = f"""
 🆘 *مساعدة بوت الترجمة*
 
-🔹 *لغة الهدف الحالية:* {context.user_data.get('target_lang_name', 'العربية')}
+🔹 *لغة الهدف الحالية:* {context.user_data.get('target_lang_name', '🇸🇦 العربية')}
 🔹 *طريقة الاستخدام:*
 1. أرسل أي نص وسيتم ترجمته تلقائياً:
-   - إذا كان النص بلغة الهدف ({context.user_data.get('target_lang_name', 'العربية')}) سيتم ترجمته للإنجليزية
-   - إذا كان النص بأي لغة أخرى سيتم ترجمته للغة الهدف
+   - النص العربي → الإنجليزية
+   - النص الأجنبي → العربية
 
 2. لتغيير لغة الهدف:
    - اضغط على زر "🌐 تغيير لغة الهدف"
