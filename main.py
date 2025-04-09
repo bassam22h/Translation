@@ -95,7 +95,7 @@ def handle_text(update: Update, context: CallbackContext):
             context.user_data['pending_text'] = user_message
             update.message.reply_text(
                 "لقد أرسلت نصاً بنفس لغتك الحالية.\n"
-                "الرجاء اختيار اللغة التي تريد الترجمة الترجمة إليها:",
+                "الرجاء اختيار اللغة التي تريد الترجمة إليها:",
                 reply_markup=create_lang_keyboard()
             )
         else:
